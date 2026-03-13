@@ -1021,8 +1021,9 @@ function draw() {
     ctx.lineWidth = 2;
     ctx.stroke();
     // Warning icon
-    ctx.globalAlpha = alpha * 3;
-    ctx.font = '20px sans-serif';
+    ctx.globalAlpha = Math.min(1, alpha * 3);
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('⚠️', hz.x, hz.y);
@@ -1050,8 +1051,10 @@ function draw() {
       ctx.fillRect(-e.size, -e.size, e.size * 2, e.size * 2);
     }
 
-    // Emoji
-    ctx.font = `${e.size}px sans-serif`;
+    // Emoji — reset state fully for mobile Safari compatibility
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff';
+    ctx.font = `${e.size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(e.emoji, 0, 0);
