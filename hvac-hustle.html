@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>HVAC Hustle — Catch Leads, Dodge Bad Reviews</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a12;
+    overflow: hidden;
+    font-family: 'DM Sans', sans-serif;
+    height: 100vh;
+    cursor: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  canvas { display: block; }
+
+  #ui-layer {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  #ui-layer > * { pointer-events: auto; }
+
+  /* HUD */
+  .hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .hud-left, .hud-right { display: flex; flex-direction: column; gap: 4px; }
+  .hud-center { text-align: center; }
+
+  .hud-score {
+    font-family: 'Space Mono', monospace;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    text-shadow: 0 0 30px rgba(0, 229, 204, 0.3);
+  }
+
+  .hud-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(255,255,255,0.35);
+  }
+
+  .hud-combo {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #ff6b4a;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    transform: scale(0.8);
+  }
+
+  .hud-combo.active {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .hud-wave {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.5);
+    font-weight: 700;
+  }
+
+  .hud-season {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 100px;
+    display: inline-block;
+    margin-top: 2px;
+  }
+
+  .season-summer { background: rgba(255, 107, 74, 0.2); color: #ff6b4a; }
+  .season-winter { background: rgba(79, 111, 240, 0.2); color: #6b8aff; }
+  .season-spring { background: rgba(0, 229, 204, 0.2); color: #00e5cc; }
+  .season-fall { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+
+  /* Lives */
+  .hud-lives {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .life-pip {
+    width: 12px; height: 12px;
+    background: #00e5cc;
+    border-radius: 3px;
+    transition: all 0.3s;
+    box-shadow: 0 0 8px rgba(0, 229, 204, 0.4);
+  }
+
+  .life-pip.lost {
+    background: rgba(255,255,255,0.1);
+    box-shadow: none;
+  }
+
+  /* Power-up bar */
+  .hud-powerup {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 20;
+    pointer-events: none;
+  }
+
+  .powerup-slot {
+    width: 48px; height: 48px;
+    background: rgba(255,255,255,0.05);
+    border: 1.5px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .powerup-slot.active {
+    border-color: #00e5cc;
+    box-shadow: 0 0 20px rgba(0, 229, 204, 0.2);
+  }
+
+  .powerup-timer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: #00e5cc;
+    transition: width 0.1s linear;
+  }
+
+  /* SCREENS */
+  .screen-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    background: rgba(10, 10, 18, 0.92);
+    backdrop-filter: blur(20px);
+    transition: opacity 0.4s;
+  }
+
+  .screen-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .title-text {
+    font-family: 'Space Mono', monospace;
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 700;
+    color: #fff;
+    text-align: center;
+    letter-spacing: -0.04em;
+    line-height: 1.05;
+    margin-bottom: 0.5rem;
+  }
+
+  .title-text .accent { color: #00e5cc; }
+  .title-text .warm { color: #ff6b4a; }
+
+  .subtitle {
+    font-size: 1rem;
+    color: rgba(255,255,255,0.45);
+    text-align: center;
+    max-width: 400px;
+    line-height: 1.5;
+    margin-bottom: 2.5rem;
+  }
+
+  .start-btn {
+    padding: 1rem 3rem;
+    background: #00e5cc;
+    color: #0a0a12;
+    border: none;
+    border-radius: 14px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.25s;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
+  }
+
+  .start-btn:hover {
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: 0 12px 40px rgba(0, 229, 204, 0.3);
+  }
+
+  .start-hint {
+    margin-top: 1rem;
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.25);
+    letter-spacing: 0.05em;
+  }
+
+  /* Game over stats */
+  .go-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin: 2rem 0;
+    width: 100%;
+    max-width: 400px;
+  }
+
+  .go-stat {
+    text-align: center;
+    padding: 1rem;
+    background: rgba(255,255,255,0.04);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .go-stat .val {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .go-stat .lbl {
+    font-size: 0.65rem;
+    color: rgba(255,255,255,0.35);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 2px;
+  }
+
+  .high-score-badge {
+    display: inline-block;
+    padding: 4px 14px;
+    background: rgba(255, 107, 74, 0.15);
+    color: #ff6b4a;
+    border-radius: 100px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 1rem;
+  }
+
+  /* How to play */
+  .how-to {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+    max-width: 440px;
+    width: 100%;
+  }
+
+  .how-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 0.8rem;
+    background: rgba(255,255,255,0.03);
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .how-item .icon { font-size: 1.2rem; flex-shrink: 0; }
+
+  .how-item .desc {
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.5);
+    line-height: 1.3;
+  }
+
+  .how-item .desc strong { color: rgba(255,255,255,0.8); }
+
+  @media (max-width: 600px) {
+    .hud { padding: 10px 14px; }
+    .hud-score { font-size: 1.5rem; }
+    .how-to { grid-template-columns: 1fr; }
+    .go-stats { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+    .go-stat { padding: 0.6rem; }
+    .go-stat .val { font-size: 1.1rem; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<!-- HUD -->
+<div class="hud" id="hud" style="display:none;">
+  <div class="hud-left">
+    <div class="hud-label">Revenue</div>
+    <div class="hud-score" id="score">$0</div>
+    <div class="hud-combo" id="combo">x2 COMBO</div>
+  </div>
+  <div class="hud-center">
+    <div class="hud-wave" id="wave">Wave 1</div>
+    <div class="hud-season season-summer" id="season">Summer Rush</div>
+  </div>
+  <div class="hud-right" style="align-items: flex-end;">
+    <div class="hud-label">Reputation</div>
+    <div class="hud-lives" id="lives"></div>
+  </div>
+</div>
+
+<!-- Power-up display -->
+<div class="hud-powerup" id="powerups" style="display:none;">
+  <div class="powerup-slot" id="pu-magnet" title="Lead Magnet">🧲<div class="powerup-timer" style="width:0%"></div></div>
+  <div class="powerup-slot" id="pu-shield" title="Reputation Shield">🛡️<div class="powerup-timer" style="width:0%"></div></div>
+  <div class="powerup-slot" id="pu-double" title="Double Revenue">💰<div class="powerup-timer" style="width:0%"></div></div>
+  <div class="powerup-slot" id="pu-freeze" title="Market Freeze">❄️<div class="powerup-timer" style="width:0%"></div></div>
+</div>
+
+<!-- Start Screen -->
+<div class="screen-overlay" id="start-screen">
+  <div class="title-text">HVAC<br><span class="accent">HUSTLE</span></div>
+  <p class="subtitle">Catch leads, collect 5-star reviews, dodge bad press. Grow your HVAC empire one service call at a time.</p>
+  <div class="how-to">
+    <div class="how-item"><span class="icon">🔥</span><div class="desc"><strong>Hot Leads</strong> — big revenue</div></div>
+    <div class="how-item"><span class="icon">⭐</span><div class="desc"><strong>5-Stars</strong> — combo multiplier</div></div>
+    <div class="how-item"><span class="icon">👎</span><div class="desc"><strong>Bad Reviews</strong> — zigzag toward you</div></div>
+    <div class="how-item"><span class="icon">😈</span><div class="desc"><strong>Competitors</strong> — they HOME IN</div></div>
+    <div class="how-item"><span class="icon">⚖️</span><div class="desc"><strong>Lawsuits</strong> — lose 2 reputation!</div></div>
+    <div class="how-item"><span class="icon">💀</span><div class="desc"><strong>Price Wars</strong> — fast & homing</div></div>
+    <div class="how-item"><span class="icon">⚠️</span><div class="desc"><strong>Hazard Zones</strong> — get out fast</div></div>
+    <div class="how-item"><span class="icon">🧲</span><div class="desc"><strong>Power-ups</strong> — rare & brief</div></div>
+  </div>
+  <button class="start-btn" id="start-btn">START HUSTLING</button>
+  <p class="start-hint">Mouse / Touch to move your van</p>
+</div>
+
+<!-- Game Over Screen -->
+<div class="screen-overlay hidden" id="gameover-screen">
+  <div class="high-score-badge" id="hs-badge" style="display:none;">NEW HIGH SCORE!</div>
+  <div class="title-text">GAME <span class="warm">OVER</span></div>
+  <div class="go-stats">
+    <div class="go-stat"><div class="val" id="go-score">$0</div><div class="lbl">Revenue</div></div>
+    <div class="go-stat"><div class="val" id="go-leads">0</div><div class="lbl">Leads</div></div>
+    <div class="go-stat"><div class="val" id="go-wave">1</div><div class="lbl">Wave</div></div>
+  </div>
+  <button class="start-btn" id="restart-btn">TRY AGAIN</button>
+  <p class="start-hint" id="go-highscore">Best: $0</p>
+</div>
+
+<!-- Wave Announcement -->
+<div class="screen-overlay hidden" id="wave-screen" style="background: transparent; backdrop-filter: none;">
+  <div class="title-text" id="wave-title" style="font-size: 2rem;">Wave 2</div>
+  <div class="hud-season" id="wave-season" style="font-size: 0.85rem; margin-top: 8px;">Summer Rush</div>
+</div>
+
+<script>
+// ============================================================
+// HVAC HUSTLE — An addictive arcade game for HVAC pros
+// ============================================================
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+// Audio
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+
+function initAudio() {
+  if (!audioCtx) audioCtx = new AudioCtx();
+}
+
+function playSound(freq, type, duration, vol = 0.15) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+  gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + duration);
+}
+
+function sfxCatch() {
+  playSound(880, 'sine', 0.12, 0.12);
+  playSound(1320, 'sine', 0.08, 0.08);
+  setTimeout(() => playSound(1760, 'sine', 0.1, 0.06), 50);
+}
+
+function sfxStar() {
+  playSound(1047, 'sine', 0.15, 0.1);
+  setTimeout(() => playSound(1319, 'sine', 0.15, 0.1), 70);
+  setTimeout(() => playSound(1568, 'sine', 0.2, 0.1), 140);
+}
+
+function sfxBad() {
+  playSound(200, 'sawtooth', 0.25, 0.12);
+  playSound(150, 'square', 0.3, 0.08);
+}
+
+function sfxPowerup() {
+  [523, 659, 784, 1047].forEach((f, i) => {
+    setTimeout(() => playSound(f, 'sine', 0.15, 0.1), i * 60);
+  });
+}
+
+function sfxCombo() {
+  playSound(660, 'triangle', 0.1, 0.08);
+  setTimeout(() => playSound(990, 'triangle', 0.15, 0.08), 60);
+}
+
+function sfxGameOver() {
+  [400, 350, 300, 200].forEach((f, i) => {
+    setTimeout(() => playSound(f, 'sawtooth', 0.3, 0.1), i * 120);
+  });
+}
+
+// Resize
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Game state
+let G = {};
+let highScore = parseInt(localStorage.getItem('hvac_hustle_hs') || '0');
+let mouse = { x: canvas.width / 2, y: canvas.height - 100 };
+let gameRunning = false;
+let animFrame;
+
+// Entities — moderate base speeds, difficulty comes from wave scaling
+const ENTITY_TYPES = {
+  hotLead:    { emoji: '🔥', label: '+$500', value: 500, speed: 1.1, size: 28, good: true },
+  warmLead:   { emoji: '📞', label: '+$200', value: 200, speed: 0.9, size: 26, good: true },
+  coldLead:   { emoji: '📋', label: '+$80',  value: 80,  speed: 0.7, size: 24, good: true },
+  fiveStar:   { emoji: '⭐', label: '+COMBO', value: 100, speed: 0.8, size: 26, good: true, star: true },
+  bigJob:     { emoji: '🏠', label: '+$1000', value: 1000, speed: 1.4, size: 30, good: true, rare: true },
+  badReview:  { emoji: '👎', label: '-1 REP', value: 0, speed: 1.0, size: 30, good: false, damage: true },
+  spamLead:   { emoji: '🚫', label: 'SPAM!', value: -300, speed: 0.9, size: 28, good: false },
+  competitor: { emoji: '😈', label: '-$500', value: -500, speed: 1.3, size: 32, good: false, homing: true },
+  lawsuit:    { emoji: '⚖️', label: '-2 REP!', value: -400, speed: 1.2, size: 34, good: false, damage: true, doubleDmg: true },
+  taxAudit:   { emoji: '📑', label: 'AUDIT!', value: -800, speed: 1.0, size: 36, good: false, damage: true },
+  priceWar:   { emoji: '💀', label: 'PRICE WAR', value: -600, speed: 1.8, size: 30, good: false, homing: true },
+  // Power-ups
+  puMagnet:   { emoji: '🧲', label: 'MAGNET!', value: 50, speed: 1.2, size: 28, good: true, powerup: 'magnet' },
+  puShield:   { emoji: '🛡️', label: 'SHIELD!', value: 50, speed: 1.2, size: 28, good: true, powerup: 'shield' },
+  puDouble:   { emoji: '💰', label: '2X REVENUE!', value: 50, speed: 1.3, size: 28, good: true, powerup: 'double' },
+  puFreeze:   { emoji: '❄️', label: 'FREEZE!', value: 50, speed: 1.3, size: 28, good: true, powerup: 'freeze' },
+};
+
+const SEASONS = [
+  { name: 'Summer Rush', class: 'season-summer', boost: 'hotLead', color: '#ff6b4a' },
+  { name: 'Fall Maintenance', class: 'season-fall', boost: 'warmLead', color: '#f59e0b' },
+  { name: 'Winter Emergency', class: 'season-winter', boost: 'bigJob', color: '#6b8aff' },
+  { name: 'Spring Tune-Up', class: 'season-spring', boost: 'coldLead', color: '#00e5cc' },
+];
+
+function initGame() {
+  G = {
+    score: 0,
+    lives: 3, // only 3 lives — every hit matters
+    wave: 1,
+    combo: 0,
+    comboTimer: 0,
+    maxCombo: 0,
+    leadsCollected: 0,
+    entities: [],
+    particles: [],
+    floatingTexts: [],
+    hazardZones: [],
+    spawnTimer: 0,
+    spawnRate: 50, // comfortable wave 1, tightens fast
+    waveTimer: 0,
+    waveDuration: 720,
+    season: SEASONS[0],
+    seasonIdx: 0,
+    // Van — slightly smaller than original
+    van: { x: canvas.width / 2, y: canvas.height - 80, w: 50, h: 32, targetX: canvas.width / 2 },
+    // Power-ups
+    powerups: { magnet: 0, shield: 0, double: 0, freeze: 0 },
+    // Screen shake
+    shake: 0,
+    // Speed multiplier — starts normal, ramps hard
+    speedMult: 1.0,
+    // Background stars
+    bgStars: Array.from({ length: 60 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      s: Math.random() * 1.5 + 0.5,
+      a: Math.random() * 0.4 + 0.1
+    })),
+    // Road lines
+    roadOffset: 0,
+  };
+  updateHUD();
+}
+
+function updateHUD() {
+  document.getElementById('score').textContent = '$' + G.score.toLocaleString();
+  document.getElementById('wave').textContent = 'Wave ' + G.wave;
+
+  const s = G.season;
+  const se = document.getElementById('season');
+  se.textContent = s.name;
+  se.className = 'hud-season ' + s.class;
+
+  const combo = document.getElementById('combo');
+  if (G.combo >= 2) {
+    combo.textContent = 'x' + G.combo + ' COMBO';
+    combo.classList.add('active');
+  } else {
+    combo.classList.remove('active');
+  }
+
+  const livesEl = document.getElementById('lives');
+  livesEl.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const pip = document.createElement('div');
+    pip.className = 'life-pip' + (i >= G.lives ? ' lost' : '');
+    livesEl.appendChild(pip);
+  }
+
+  // Power-up indicators
+  ['magnet', 'shield', 'double', 'freeze'].forEach(p => {
+    const el = document.getElementById('pu-' + p);
+    const timer = el.querySelector('.powerup-timer');
+    if (G.powerups[p] > 0) {
+      el.classList.add('active');
+      timer.style.width = (G.powerups[p] / 300 * 100) + '%';
+    } else {
+      el.classList.remove('active');
+      timer.style.width = '0%';
+    }
+  });
+}
+
+// Spawn logic — wave 1 is friendly, then it gets mean fast
+function getSpawnWeights() {
+  const wv = G.wave;
+  const w = {
+    // Good stuff stays steady, slight decline in later waves
+    hotLead: Math.max(6, 18 - wv * 1),
+    warmLead: Math.max(8, 25 - wv * 1.2),
+    coldLead: Math.max(6, 20 - wv * 1),
+    fiveStar: Math.max(4, 10 - wv * 0.5),
+    bigJob: Math.max(1, 3 - wv * 0.2),
+    // Bad stuff: almost nothing wave 1, then ramps HARD
+    badReview: Math.max(2, 4 + wv * 4),
+    spamLead: Math.max(1, 2 + wv * 3),
+    competitor: Math.max(0, (wv - 1) * 3),
+    lawsuit: Math.max(0, (wv - 3) * 3),
+    taxAudit: Math.max(0, (wv - 5) * 2.5),
+    priceWar: Math.max(0, (wv - 4) * 3.5),
+    // Power-ups: a bit more common early to teach mechanics
+    puMagnet: wv <= 2 ? 2.5 : 1,
+    puShield: wv <= 2 ? 2.5 : 1,
+    puDouble: wv <= 2 ? 2 : 0.7,
+    puFreeze: wv <= 2 ? 2 : 0.7,
+  };
+
+  // Season boost
+  if (G.season.boost && w[G.season.boost] !== undefined) {
+    w[G.season.boost] *= 1.5;
+  }
+
+  return w;
+}
+
+function weightedRandom(weights) {
+  const entries = Object.entries(weights);
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  let r = Math.random() * total;
+  for (const [key, val] of entries) {
+    r -= val;
+    if (r <= 0) return key;
+  }
+  return entries[entries.length - 1][0];
+}
+
+function spawnEntity() {
+  const type = weightedRandom(getSpawnWeights());
+  const def = ENTITY_TYPES[type];
+  const x = Math.random() * (canvas.width - 80) + 40;
+  // Speed variance grows with wave
+  const speedVariance = Math.random() * (0.3 + G.wave * 0.12);
+  G.entities.push({
+    type, ...def,
+    x, y: -40,
+    vy: (def.speed + speedVariance) * G.speedMult,
+    vx: (Math.random() - 0.5) * 1.8, // more lateral drift
+    rot: 0,
+    rotSpeed: (Math.random() - 0.5) * 0.05,
+    scale: 1,
+    alive: true,
+    bobPhase: Math.random() * Math.PI * 2,
+    age: 0, // for homing delay
+  });
+}
+
+// Spawn a burst of enemies — used for ambush waves
+function spawnBurst(count, types) {
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => {
+      const type = types[Math.floor(Math.random() * types.length)];
+      const def = ENTITY_TYPES[type];
+      if (!def) return;
+      const x = Math.random() * (canvas.width - 80) + 40;
+      G.entities.push({
+        type, ...def,
+        x, y: -40 - i * 20,
+        vy: (def.speed + 0.5 + Math.random()) * G.speedMult,
+        vx: (Math.random() - 0.5) * 2,
+        rot: 0,
+        rotSpeed: (Math.random() - 0.5) * 0.05,
+        scale: 1,
+        alive: true,
+        bobPhase: Math.random() * Math.PI * 2,
+        age: 0,
+      });
+    }, i * 80);
+  }
+}
+
+// Particles
+function emitParticles(x, y, color, count = 12) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = Math.random() * 4 + 1.5;
+    G.particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 1.5,
+      life: 1,
+      decay: 0.02 + Math.random() * 0.02,
+      size: Math.random() * 5 + 2,
+      color,
+    });
+  }
+}
+
+function emitCoinParticles(x, y) {
+  for (let i = 0; i < 6; i++) {
+    G.particles.push({
+      x: x + (Math.random() - 0.5) * 20,
+      y,
+      vx: (Math.random() - 0.5) * 2,
+      vy: -Math.random() * 3 - 1,
+      life: 1,
+      decay: 0.015,
+      size: 3,
+      color: '#f59e0b',
+      glow: true,
+    });
+  }
+}
+
+function addFloatingText(x, y, text, color) {
+  G.floatingTexts.push({ x, y, text, color, life: 1, vy: -2.5 });
+}
+
+// Collision
+function circleRect(cx, cy, cr, rx, ry, rw, rh) {
+  const nearX = Math.max(rx, Math.min(cx, rx + rw));
+  const nearY = Math.max(ry, Math.min(cy, ry + rh));
+  const dx = cx - nearX;
+  const dy = cy - nearY;
+  return dx * dx + dy * dy <= cr * cr;
+}
+
+// Game logic
+function update() {
+  const van = G.van;
+
+  // Move van — responsive early, gets sluggish in late waves
+  const dx = mouse.x - van.x;
+  const vanSpeed = Math.max(0.06, 0.14 - G.wave * 0.008);
+  van.x += dx * vanSpeed;
+  van.x = Math.max(van.w / 2, Math.min(canvas.width - van.w / 2, van.x));
+
+  // Spawn — gentle wave 1, relentless later
+  G.spawnTimer++;
+  const rate = Math.max(12, G.spawnRate - G.wave * 4);
+  if (G.spawnTimer >= rate) {
+    G.spawnTimer = 0;
+    spawnEntity();
+    // Multi-spawns kick in from wave 3+
+    if (G.wave >= 3 && Math.random() < 0.3) spawnEntity();
+    if (G.wave >= 5 && Math.random() < 0.35) spawnEntity();
+    if (G.wave >= 7 && Math.random() < 0.3) spawnEntity();
+    // Random ambush bursts from wave 4+
+    if (G.wave >= 4 && Math.random() < 0.006) {
+      spawnBurst(3 + G.wave, ['badReview', 'spamLead', 'competitor']);
+    }
+  }
+
+  // Wave progression
+  G.waveTimer++;
+  if (G.waveTimer >= G.waveDuration) {
+    G.waveTimer = 0;
+    G.wave++;
+    G.speedMult = 1.0 + (G.wave - 1) * 0.2; // 1.0 → 1.2 → 1.4 → 1.6 ...
+    G.seasonIdx = (G.seasonIdx + 1) % SEASONS.length;
+    G.season = SEASONS[G.seasonIdx];
+    // Ambush burst at wave start — scales with wave
+    if (G.wave >= 3) {
+      spawnBurst(G.wave * 2, ['badReview', 'competitor', 'spamLead', 'lawsuit']);
+    }
+    showWaveScreen();
+    updateHUD();
+  }
+
+  // Combo decay — faster, need to keep catching stars
+  if (G.comboTimer > 0) {
+    G.comboTimer--;
+    if (G.comboTimer <= 0) {
+      G.combo = Math.max(0, G.combo - 1);
+      if (G.combo > 0) G.comboTimer = 60; // cascading decay
+      else G.combo = 0;
+    }
+  }
+
+  // Power-up timers — shorter durations
+  for (const p in G.powerups) {
+    if (G.powerups[p] > 0) G.powerups[p]--;
+  }
+
+  // Hazard zone logic — danger areas from wave 4+
+  if (G.wave >= 4 && Math.random() < 0.003) {
+    G.hazardZones.push({
+      x: Math.random() * canvas.width,
+      y: canvas.height * (0.5 + Math.random() * 0.35),
+      radius: 60 + Math.random() * 40,
+      life: 300,
+      maxLife: 300,
+    });
+  }
+  for (const hz of G.hazardZones) {
+    hz.life--;
+    // Damage van if inside
+    const hdx = van.x - hz.x;
+    const hdy = van.y - hz.y;
+    if (Math.sqrt(hdx * hdx + hdy * hdy) < hz.radius && hz.life > 30 && hz.life % 60 === 0) {
+      if (G.powerups.shield <= 0) {
+        G.lives--;
+        G.shake = 10;
+        sfxBad();
+        addFloatingText(van.x, van.y - 30, 'HAZARD!', '#ff4444');
+        emitParticles(van.x, van.y, '#ff4444', 10);
+        if (G.lives <= 0) { gameOver(); return; }
+      }
+    }
+  }
+  G.hazardZones = G.hazardZones.filter(hz => hz.life > 0);
+
+  // Freeze effect — weaker
+  const freezeMult = G.powerups.freeze > 0 ? 0.35 : 1;
+
+  // Update entities
+  for (const e of G.entities) {
+    if (!e.alive) continue;
+
+    e.age = (e.age || 0) + 1;
+
+    // Magnet effect on good entities — smaller radius
+    if (G.powerups.magnet > 0 && e.good) {
+      const mdx = van.x - e.x;
+      const mdy = van.y - e.y;
+      const dist = Math.sqrt(mdx * mdx + mdy * mdy);
+      if (dist < 140) {
+        e.x += mdx * 0.05;
+        e.y += mdy * 0.03;
+      }
+    }
+
+    // Homing enemies actively chase the van
+    if (e.homing && e.age > 30) {
+      const hdx = van.x - e.x;
+      const hdy = van.y - e.y;
+      const hd = Math.sqrt(hdx * hdx + hdy * hdy);
+      if (hd > 0) {
+        const homingStr = 0.02 + G.wave * 0.01;
+        e.vx += (hdx / hd) * homingStr;
+        e.vy += (hdy / hd) * homingStr * 0.5;
+        // Clamp horizontal speed
+        e.vx = Math.max(-3.5, Math.min(3.5, e.vx));
+      }
+    }
+
+    // Zigzag pattern for bad reviews (unpredictable)
+    if (e.type === 'badReview' && e.age > 20) {
+      e.vx += Math.sin(e.age * 0.08) * 0.15;
+    }
+
+    e.y += e.vy * freezeMult;
+    e.x += e.vx * freezeMult;
+    e.rot += e.rotSpeed * freezeMult;
+    e.bobPhase += 0.05;
+
+    // Bounce off walls
+    if (e.x < 20 || e.x > canvas.width - 20) e.vx *= -1;
+
+    // Check collision with van
+    const hitRadius = e.size * 0.6;
+    if (circleRect(e.x, e.y, hitRadius, van.x - van.w / 2, van.y - van.h / 2, van.w, van.h)) {
+      e.alive = false;
+
+      if (e.powerup) {
+        G.powerups[e.powerup] = 300; // 5 seconds — shorter!
+        sfxPowerup();
+        emitParticles(e.x, e.y, '#00e5cc', 20);
+        addFloatingText(e.x, e.y, e.label, '#00e5cc');
+      } else if (e.good) {
+        let val = e.value;
+        if (e.star) {
+          G.combo = Math.min(G.combo + 1, 10);
+          G.comboTimer = 100; // tight window to maintain combo
+          G.maxCombo = Math.max(G.maxCombo, G.combo);
+          sfxStar();
+          sfxCombo();
+        } else {
+          sfxCatch();
+          G.leadsCollected++;
+        }
+        const mult = G.combo >= 2 ? G.combo : 1;
+        const doubleMult = G.powerups.double > 0 ? 2 : 1;
+        val = val * mult * doubleMult;
+        G.score += val;
+        emitParticles(e.x, e.y, e.star ? '#f59e0b' : '#00e5cc', e.rare ? 25 : 12);
+        emitCoinParticles(e.x, e.y);
+        addFloatingText(e.x, e.y, '+$' + val, e.star ? '#f59e0b' : '#00e5cc');
+      } else {
+        // Bad entity
+        if (G.powerups.shield > 0) {
+          addFloatingText(e.x, e.y, 'BLOCKED!', '#6b8aff');
+          emitParticles(e.x, e.y, '#6b8aff', 8);
+          playSound(440, 'sine', 0.1, 0.08);
+        } else {
+          if (e.damage) {
+            const dmg = e.doubleDmg ? 2 : 1;
+            G.lives -= dmg;
+            G.combo = 0;
+            G.comboTimer = 0;
+          }
+          if (e.value < 0) G.score = Math.max(0, G.score + e.value);
+          sfxBad();
+          G.shake = 12;
+          emitParticles(e.x, e.y, '#ff4444', 15);
+          addFloatingText(e.x, e.y, e.label, '#ff4444');
+
+          if (G.lives <= 0) {
+            gameOver();
+            return;
+          }
+        }
+      }
+    }
+
+    // Off screen
+    if (e.y > canvas.height + 50) {
+      e.alive = false;
+      if (e.good && !e.powerup) {
+        // Lose combo on any miss
+        G.combo = 0;
+        G.comboTimer = 0;
+        // From wave 4+, missing a big job costs a life
+        if (e.rare && G.wave >= 4) {
+          G.lives--;
+          G.shake = 6;
+          addFloatingText(e.x, canvas.height - 40, 'MISSED JOB!', '#ff6b4a');
+          sfxBad();
+          if (G.lives <= 0) { gameOver(); return; }
+        }
+      }
+    }
+  }
+
+  // Filter dead
+  G.entities = G.entities.filter(e => e.alive);
+
+  // Update particles
+  for (const p of G.particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.08;
+    p.life -= p.decay;
+  }
+  G.particles = G.particles.filter(p => p.life > 0);
+
+  // Update floating texts
+  for (const ft of G.floatingTexts) {
+    ft.y += ft.vy;
+    ft.vy *= 0.97;
+    ft.life -= 0.018;
+  }
+  G.floatingTexts = G.floatingTexts.filter(ft => ft.life > 0);
+
+  // Shake decay
+  if (G.shake > 0) G.shake *= 0.85;
+  if (G.shake < 0.5) G.shake = 0;
+
+  // Road scroll
+  G.roadOffset = (G.roadOffset + 2) % 40;
+
+  updateHUD();
+}
+
+// Drawing
+function draw() {
+  const W = canvas.width;
+  const H = canvas.height;
+
+  ctx.save();
+
+  // Screen shake
+  if (G.shake > 0) {
+    ctx.translate(
+      (Math.random() - 0.5) * G.shake * 2,
+      (Math.random() - 0.5) * G.shake * 2
+    );
+  }
+
+  // Background
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0a0a12');
+  grad.addColorStop(0.5, '#0d0f1a');
+  grad.addColorStop(1, '#111425');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Bg stars
+  for (const s of G.bgStars) {
+    ctx.globalAlpha = s.a * (0.5 + 0.5 * Math.sin(Date.now() * 0.001 + s.x));
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(s.x, s.y, s.s, s.s);
+  }
+  ctx.globalAlpha = 1;
+
+  // Road
+  const roadW = Math.min(500, W * 0.7);
+  const roadX = (W - roadW) / 2;
+  ctx.fillStyle = 'rgba(255,255,255,0.015)';
+  ctx.fillRect(roadX, 0, roadW, H);
+
+  // Road lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([20, 20]);
+  ctx.lineDashOffset = -G.roadOffset;
+  const lanes = 3;
+  for (let i = 1; i < lanes; i++) {
+    const lx = roadX + (roadW / lanes) * i;
+    ctx.beginPath();
+    ctx.moveTo(lx, 0);
+    ctx.lineTo(lx, H);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Road edges
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(roadX, 0); ctx.lineTo(roadX, H);
+  ctx.moveTo(roadX + roadW, 0); ctx.lineTo(roadX + roadW, H);
+  ctx.stroke();
+
+  // Season ambient glow
+  const seasonColor = G.season.color;
+  const ambGrad = ctx.createRadialGradient(W / 2, H * 0.3, 0, W / 2, H * 0.3, W * 0.6);
+  ambGrad.addColorStop(0, seasonColor + '08');
+  ambGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = ambGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Freeze overlay
+  if (G.powerups.freeze > 0) {
+    ctx.fillStyle = 'rgba(107, 138, 255, 0.04)';
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Hazard zones
+  for (const hz of G.hazardZones) {
+    const pulse = Math.sin(Date.now() * 0.008) * 0.3 + 0.7;
+    const fadeIn = Math.min(1, (hz.maxLife - hz.life) / 60);
+    const fadeOut = Math.min(1, hz.life / 60);
+    const alpha = fadeIn * fadeOut * pulse * 0.25;
+    ctx.beginPath();
+    ctx.arc(hz.x, hz.y, hz.radius, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 50, 50, ${alpha})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(255, 80, 80, ${alpha * 1.5})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Warning icon
+    ctx.globalAlpha = alpha * 3;
+    ctx.font = '20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⚠️', hz.x, hz.y);
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw entities
+  for (const e of G.entities) {
+    ctx.save();
+    ctx.translate(e.x, e.y + Math.sin(e.bobPhase) * 3);
+    ctx.rotate(e.rot);
+
+    // Glow
+    if (e.good) {
+      const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, e.size);
+      glow.addColorStop(0, e.star ? 'rgba(245, 158, 11, 0.15)' : e.rare ? 'rgba(0, 229, 204, 0.2)' : 'rgba(0, 229, 204, 0.08)');
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.fillRect(-e.size, -e.size, e.size * 2, e.size * 2);
+    } else {
+      const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, e.size);
+      glow.addColorStop(0, 'rgba(255, 68, 68, 0.12)');
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
+      ctx.fillRect(-e.size, -e.size, e.size * 2, e.size * 2);
+    }
+
+    // Emoji
+    ctx.font = `${e.size}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(e.emoji, 0, 0);
+    ctx.restore();
+  }
+
+  // Draw van
+  const van = G.van;
+  ctx.save();
+  ctx.translate(van.x, van.y);
+
+  // Van shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.ellipse(0, van.h / 2 + 4, van.w / 2 + 2, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Magnet aura
+  if (G.powerups.magnet > 0) {
+    const pulse = Math.sin(Date.now() * 0.008) * 0.2 + 0.8;
+    ctx.strokeStyle = `rgba(0, 229, 204, ${0.15 * pulse})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 100 * pulse, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Shield aura
+  if (G.powerups.shield > 0) {
+    const pulse = Math.sin(Date.now() * 0.006) * 0.15 + 0.85;
+    ctx.strokeStyle = `rgba(107, 138, 255, ${0.25 * pulse})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 38 * pulse, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Van body
+  ctx.fillStyle = '#2d4aad';
+  roundRect(ctx, -van.w / 2, -van.h / 2, van.w, van.h, 8);
+  ctx.fill();
+
+  // Van highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  roundRect(ctx, -van.w / 2 + 3, -van.h / 2 + 3, van.w - 6, van.h / 3, 5);
+  ctx.fill();
+
+  // Windshield
+  ctx.fillStyle = 'rgba(107, 138, 255, 0.5)';
+  roundRect(ctx, -van.w / 2 + 6, -van.h / 2 + 4, van.w - 12, 10, 3);
+  ctx.fill();
+
+  // HVAC text
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 8px "DM Sans", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('HVAC', 0, 4);
+
+  // Wheels
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(-van.w / 2 - 2, -6, 5, 12);
+  ctx.fillRect(van.w / 2 - 3, -6, 5, 12);
+
+  // Headlights
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillRect(-van.w / 2 + 4, -van.h / 2 - 1, 6, 3);
+  ctx.fillRect(van.w / 2 - 10, -van.h / 2 - 1, 6, 3);
+
+  // Double revenue glow
+  if (G.powerups.double > 0) {
+    ctx.fillStyle = `rgba(245, 158, 11, ${0.1 + Math.sin(Date.now() * 0.01) * 0.05})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, 35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+
+  // Draw particles
+  for (const p of G.particles) {
+    ctx.globalAlpha = p.life;
+    if (p.glow) {
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = p.color;
+    }
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+
+  // Floating texts
+  for (const ft of G.floatingTexts) {
+    ctx.globalAlpha = ft.life;
+    ctx.font = 'bold 16px "Space Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = ft.color;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = ft.color;
+    ctx.fillText(ft.text, ft.x, ft.y);
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function gameLoop() {
+  if (!gameRunning) return;
+  update();
+  draw();
+  animFrame = requestAnimationFrame(gameLoop);
+}
+
+function startGame() {
+  initAudio();
+  initGame();
+  document.getElementById('start-screen').classList.add('hidden');
+  document.getElementById('gameover-screen').classList.add('hidden');
+  document.getElementById('hud').style.display = '';
+  document.getElementById('powerups').style.display = '';
+  gameRunning = true;
+  gameLoop();
+}
+
+function gameOver() {
+  gameRunning = false;
+  cancelAnimationFrame(animFrame);
+  sfxGameOver();
+
+  const isHS = G.score > highScore;
+  if (isHS) {
+    highScore = G.score;
+    localStorage.setItem('hvac_hustle_hs', highScore);
+  }
+
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('powerups').style.display = 'none';
+  document.getElementById('go-score').textContent = '$' + G.score.toLocaleString();
+  document.getElementById('go-leads').textContent = G.leadsCollected;
+  document.getElementById('go-wave').textContent = G.wave;
+  document.getElementById('go-highscore').textContent = 'Best: $' + highScore.toLocaleString();
+  document.getElementById('hs-badge').style.display = isHS ? '' : 'none';
+
+  setTimeout(() => {
+    document.getElementById('gameover-screen').classList.remove('hidden');
+  }, 300);
+}
+
+function showWaveScreen() {
+  const ws = document.getElementById('wave-screen');
+  document.getElementById('wave-title').textContent = 'Wave ' + G.wave;
+  const se = document.getElementById('wave-season');
+  se.textContent = G.season.name;
+  se.className = 'hud-season ' + G.season.class;
+  ws.classList.remove('hidden');
+  setTimeout(() => ws.classList.add('hidden'), 2000);
+}
+
+// Input
+canvas.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  mouse.x = e.touches[0].clientX;
+  mouse.y = e.touches[0].clientY;
+}, { passive: false });
+canvas.addEventListener('touchstart', e => {
+  mouse.x = e.touches[0].clientX;
+  mouse.y = e.touches[0].clientY;
+});
+
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('restart-btn').addEventListener('click', startGame);
+
+// Keyboard shortcut
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'Enter') {
+    if (!gameRunning) {
+      if (!document.getElementById('start-screen').classList.contains('hidden') ||
+          !document.getElementById('gameover-screen').classList.contains('hidden')) {
+        startGame();
+      }
+    }
+  }
+});
+
+// Initial background render
+function drawIdle() {
+  const W = canvas.width;
+  const H = canvas.height;
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0a0a12');
+  grad.addColorStop(1, '#111425');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Ambient stars
+  for (let i = 0; i < 40; i++) {
+    const x = (Math.sin(i * 7.3 + Date.now() * 0.0001) * 0.5 + 0.5) * W;
+    const y = (Math.cos(i * 13.7 + Date.now() * 0.00008) * 0.5 + 0.5) * H;
+    ctx.globalAlpha = 0.15 + Math.sin(Date.now() * 0.002 + i) * 0.1;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(x, y, 1.5, 1.5);
+  }
+  ctx.globalAlpha = 1;
+  if (!gameRunning) requestAnimationFrame(drawIdle);
+}
+drawIdle();
+</script>
+</body>
+</html>
