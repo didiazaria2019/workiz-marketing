@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>HVAC Hero — A Platformer for Pros</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=DM+Sans:wght@500;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0a0a12;overflow:hidden;font-family:'DM Sans',sans-serif;height:100vh;touch-action:none;user-select:none;-webkit-user-select:none}
+  canvas{display:block;image-rendering:pixelated}
+
+  .overlay{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;background:rgba(10,10,18,0.92);backdrop-filter:blur(16px);transition:opacity 0.4s}
+  .overlay.hidden{opacity:0;pointer-events:none}
+  .title{font-family:'Press Start 2P',monospace;font-size:clamp(1.8rem,5vw,3.2rem);color:#fff;text-align:center;line-height:1.3;margin-bottom:0.3rem;text-shadow:0 4px 0 #1a2b6b,0 0 40px rgba(0,229,204,0.3)}
+  .title .cyan{color:#00e5cc}
+  .title .warm{color:#ff6b4a}
+  .sub{font-size:0.95rem;color:rgba(255,255,255,0.4);text-align:center;max-width:420px;line-height:1.5;margin-bottom:2rem}
+  .btn{padding:1rem 2.5rem;background:#00e5cc;color:#0a0a12;border:none;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:1.05rem;font-weight:800;cursor:pointer;transition:all 0.25s;text-transform:uppercase;letter-spacing:0.02em}
+  .btn:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(0,229,204,0.3)}
+  .hint{margin-top:0.8rem;font-size:0.7rem;color:rgba(255,255,255,0.2);letter-spacing:0.04em}
+
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:1.5rem 0;width:100%;max-width:380px}
+  .stat{text-align:center;padding:0.8rem;background:rgba(255,255,255,0.04);border-radius:10px;border:1px solid rgba(255,255,255,0.06)}
+  .stat .v{font-family:'Press Start 2P',monospace;font-size:1.1rem;color:#fff}
+  .stat .l{font-size:0.6rem;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.08em;margin-top:2px}
+  .hs-badge{padding:4px 14px;background:rgba(255,107,74,0.15);color:#ff6b4a;border-radius:100px;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.8rem}
+
+  /* HUD */
+  .hud{position:fixed;top:0;left:0;right:0;padding:12px 20px;display:flex;justify-content:space-between;align-items:center;z-index:20;pointer-events:none}
+  .hud-item{display:flex;flex-direction:column;gap:2px}
+  .hud-val{font-family:'Press Start 2P',monospace;font-size:0.85rem;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,0.5)}
+  .hud-lbl{font-size:0.55rem;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.1em}
+  .hud-lives{display:flex;gap:4px}
+  .hud-heart{font-size:1rem}
+
+  /* Mobile controls */
+  .mobile-controls{position:fixed;bottom:0;left:0;right:0;display:none;z-index:30;padding:10px 16px 24px;pointer-events:none}
+  .ctrl-row{display:flex;justify-content:space-between;align-items:flex-end;pointer-events:none}
+  .ctrl-btn{width:60px;height:60px;border-radius:16px;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;font-size:1.4rem;pointer-events:auto;-webkit-tap-highlight-color:transparent}
+  .ctrl-btn:active{background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3)}
+  .ctrl-dpad{display:flex;gap:8px}
+  .ctrl-jump{width:80px;height:80px;border-radius:50%;font-size:0.7rem;font-weight:800;color:rgba(255,255,255,0.5);letter-spacing:0.05em}
+
+  .how{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:1.5rem;max-width:400px;width:100%}
+  .how-i{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.7rem;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid rgba(255,255,255,0.05)}
+  .how-i .ic{font-size:1.1rem;flex-shrink:0}
+  .how-i .d{font-size:0.65rem;color:rgba(255,255,255,0.45);line-height:1.3}
+  .how-i .d strong{color:rgba(255,255,255,0.75)}
+
+  @media(max-width:768px){.mobile-controls{display:flex;flex-direction:column}.how{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div class="hud" id="hud" style="display:none">
+  <div class="hud-item"><div class="hud-lbl">Score</div><div class="hud-val" id="h-score">0</div></div>
+  <div class="hud-item" style="align-items:center"><div class="hud-lbl">World</div><div class="hud-val" id="h-world">1-1</div></div>
+  <div class="hud-item" style="align-items:flex-end"><div class="hud-lbl">Lives</div><div class="hud-lives" id="h-lives"></div></div>
+</div>
+
+<div class="mobile-controls" id="mob-ctrl">
+  <div class="ctrl-row">
+    <div class="ctrl-dpad">
+      <div class="ctrl-btn" id="btn-left">◀</div>
+      <div class="ctrl-btn" id="btn-right">▶</div>
+    </div>
+    <div class="ctrl-btn ctrl-jump" id="btn-jump">JUMP</div>
+  </div>
+</div>
+
+<!-- Start -->
+<div class="overlay" id="start-screen">
+  <div class="title">HVAC<br><span class="cyan">HERO</span></div>
+  <p class="sub">Run, jump, and stomp your way through the field service world. Collect leads, dodge bad reviews, and save the day.</p>
+  <div class="how">
+    <div class="how-i"><span class="ic">🔧</span><div class="d"><strong>You</strong> — HVAC tech hero</div></div>
+    <div class="how-i"><span class="ic">🔥</span><div class="d"><strong>Leads</strong> — collect for $$$</div></div>
+    <div class="how-i"><span class="ic">⭐</span><div class="d"><strong>5-Stars</strong> — bonus points</div></div>
+    <div class="how-i"><span class="ic">👎</span><div class="d"><strong>Bad Reviews</strong> — stomp or dodge</div></div>
+    <div class="how-i"><span class="ic">😈</span><div class="d"><strong>Competitors</strong> — avoid!</div></div>
+    <div class="how-i"><span class="ic">🛡️</span><div class="d"><strong>Hard Hat</strong> — invincible</div></div>
+  </div>
+  <button class="btn" id="btn-start">START GAME</button>
+  <p class="hint">Arrow keys / WASD to move • Space to jump</p>
+</div>
+
+<!-- Game Over -->
+<div class="overlay hidden" id="go-screen">
+  <div class="hs-badge" id="go-hs" style="display:none">NEW HIGH SCORE!</div>
+  <div class="title">GAME <span class="warm">OVER</span></div>
+  <div class="stats">
+    <div class="stat"><div class="v" id="go-score">0</div><div class="l">Score</div></div>
+    <div class="stat"><div class="v" id="go-leads">0</div><div class="l">Leads</div></div>
+    <div class="stat"><div class="v" id="go-dist">0</div><div class="l">Distance</div></div>
+  </div>
+  <button class="btn" id="btn-retry">TRY AGAIN</button>
+  <p class="hint" id="go-best">Best: 0</p>
+</div>
+
+<!-- Level Clear -->
+<div class="overlay hidden" id="clear-screen" style="background:rgba(10,10,18,0.8)">
+  <div class="title" style="font-size:clamp(1.2rem,3vw,2rem)">WORLD <span class="cyan" id="cl-world">1-1</span><br>CLEAR!</div>
+  <p class="sub" id="cl-msg" style="margin-bottom:1rem">Great work!</p>
+  <button class="btn" id="btn-next">NEXT WORLD</button>
+</div>
+
+<script>
+// ================================================
+// HVAC HERO — Mario-style platformer
+// ================================================
+const C = document.getElementById('c');
+const X = C.getContext('2d');
+
+// Audio
+const ACtx = window.AudioContext || window.webkitAudioContext;
+let actx;
+function initAudio(){if(!actx)actx=new ACtx()}
+function snd(f,t,d,v=0.12){if(!actx)return;const o=actx.createOscillator(),g=actx.createGain();o.type=t;o.frequency.setValueAtTime(f,actx.currentTime);g.gain.setValueAtTime(v,actx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+d);o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+d)}
+function sfxJump(){snd(400,'sine',0.15,0.1);setTimeout(()=>snd(600,'sine',0.1,0.08),50)}
+function sfxCoin(){snd(988,'sine',0.08,0.1);setTimeout(()=>snd(1319,'sine',0.12,0.1),60)}
+function sfxStar(){[1047,1319,1568,2093].forEach((f,i)=>setTimeout(()=>snd(f,'sine',0.15,0.08),i*50))}
+function sfxStomp(){snd(200,'square',0.15,0.1);snd(300,'square',0.1,0.06)}
+function sfxHurt(){snd(200,'sawtooth',0.3,0.12);snd(150,'square',0.25,0.08)}
+function sfxPowerup(){[523,659,784,1047].forEach((f,i)=>setTimeout(()=>snd(f,'sine',0.12,0.1),i*50))}
+function sfxDie(){[400,350,300,250,200].forEach((f,i)=>setTimeout(()=>snd(f,'sawtooth',0.25,0.08),i*100))}
+
+// Constants
+const TILE = 32;
+const GRAVITY = 0.55;
+const JUMP_FORCE = -11;
+const MOVE_SPEED = 3.5;
+const MOVE_ACCEL = 0.4;
+const FRICTION = 0.82;
+const MAX_FALL = 12;
+
+// Resize
+let W, H, COLS, ROWS;
+function resize(){
+  const dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  C.width = W;
+  C.height = H;
+  COLS = Math.ceil(W / TILE) + 2;
+  ROWS = Math.ceil(H / TILE) + 2;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Game state
+let G = {};
+let highScore = parseInt(localStorage.getItem('hvac_hero_hs') || '0');
+let running = false;
+let keys = {};
+
+// Input
+document.addEventListener('keydown', e => {keys[e.code]=true; if(e.code==='Space')e.preventDefault()});
+document.addEventListener('keyup', e => keys[e.code]=false);
+
+// Mobile controls
+function setupMobile(){
+  const bl=document.getElementById('btn-left'),br=document.getElementById('btn-right'),bj=document.getElementById('btn-jump');
+  function t(el,key){
+    el.addEventListener('touchstart',e=>{e.preventDefault();keys[key]=true},{passive:false});
+    el.addEventListener('touchend',e=>{e.preventDefault();keys[key]=false},{passive:false});
+    el.addEventListener('touchcancel',()=>keys[key]=false);
+  }
+  t(bl,'ArrowLeft');t(br,'ArrowRight');t(bj,'Space');
+}
+setupMobile();
+
+// ========================
+// WORLD GENERATION
+// ========================
+const THEMES = [
+  {name:'Summer Suburbs',bg1:'#1a1a3e',bg2:'#2a1a4e',ground:'#3d8b37',groundDark:'#2d6b27',sky:'#1a2a5e',accent:'#ff6b4a',buildingColors:['#2a3a6a','#3a4a7a','#1a2a5a']},
+  {name:'Winter Emergency',bg1:'#0a1a3e',bg2:'#1a2a5e',ground:'#6a7a8a',groundDark:'#5a6a7a',sky:'#0a1a4e',accent:'#6b8aff',buildingColors:['#2a3a5a','#3a4a6a','#1a2a4a']},
+  {name:'Industrial Zone',bg1:'#1a1a2a',bg2:'#2a2a3a',ground:'#5a4a3a',groundDark:'#4a3a2a',sky:'#2a1a2a',accent:'#f59e0b',buildingColors:['#3a2a2a','#4a3a3a','#2a2a2a']},
+  {name:'Downtown Rush',bg1:'#0a0a1a',bg2:'#1a1a2a',ground:'#4a4a5a',groundDark:'#3a3a4a',sky:'#1a0a2a',accent:'#00e5cc',buildingColors:['#1a2a3a','#2a3a4a','#0a1a2a']},
+];
+
+function generateWorld(worldIdx) {
+  const theme = THEMES[worldIdx % THEMES.length];
+  const levelLen = 120 + worldIdx * 30;
+  const tiles = [];
+  const entities = [];
+  const groundY = Math.floor(H / TILE) - 2;
+
+  // Init tile grid
+  for (let x = 0; x < levelLen; x++) {
+    tiles[x] = [];
+    for (let y = 0; y < groundY + 5; y++) tiles[x][y] = 0;
+  }
+
+  // Ground with gaps
+  for (let x = 0; x < levelLen; x++) {
+    // Gaps get more frequent and wider in later worlds
+    const gapChance = 0.03 + worldIdx * 0.01;
+    const gapWidth = 2 + Math.floor(Math.random() * (1 + worldIdx));
+    if (x > 8 && x < levelLen - 10 && Math.random() < gapChance) {
+      for (let g = 0; g < gapWidth && x + g < levelLen; g++) {
+        // leave gap
+        x++;
+      }
+      continue;
+    }
+    for (let y = groundY; y < groundY + 4; y++) {
+      tiles[x][y] = y === groundY ? 1 : 2; // 1 = top, 2 = fill
+    }
+  }
+
+  // Platforms
+  const platCount = 15 + worldIdx * 5;
+  for (let i = 0; i < platCount; i++) {
+    const px = 10 + Math.floor(Math.random() * (levelLen - 20));
+    const py = groundY - 3 - Math.floor(Math.random() * 4);
+    const pw = 3 + Math.floor(Math.random() * 4);
+    for (let x = px; x < px + pw && x < levelLen; x++) {
+      if (!tiles[x]) tiles[x] = [];
+      tiles[x][py] = 3; // platform
+    }
+    // Sometimes add leads on platforms
+    if (Math.random() < 0.6) {
+      entities.push({type:'lead', x:(px + pw/2)*TILE, y:(py-1)*TILE, collected:false});
+    }
+  }
+
+  // Floating duct pipes (steppable)
+  for (let i = 0; i < 8 + worldIdx * 3; i++) {
+    const dx = 12 + Math.floor(Math.random() * (levelLen - 20));
+    const dy = groundY - 5 - Math.floor(Math.random() * 3);
+    tiles[dx][dy] = 4; // duct
+    if (Math.random() < 0.4) {
+      entities.push({type:'star', x:dx*TILE, y:(dy-1)*TILE, collected:false});
+    }
+  }
+
+  // Ground-level leads
+  for (let x = 5; x < levelLen - 5; x += 4 + Math.floor(Math.random() * 4)) {
+    if (tiles[x] && tiles[x][groundY]) {
+      entities.push({type:'lead', x:x*TILE, y:(groundY-1)*TILE, collected:false, bobPhase: Math.random()*Math.PI*2});
+    }
+  }
+
+  // Stars (rarer, more points)
+  for (let x = 15; x < levelLen - 5; x += 12 + Math.floor(Math.random() * 10)) {
+    const sy = groundY - 2 - Math.floor(Math.random() * 4);
+    entities.push({type:'star', x:x*TILE, y:sy*TILE, collected:false, bobPhase: Math.random()*Math.PI*2});
+  }
+
+  // Enemies
+  const enemyCount = 8 + worldIdx * 4;
+  for (let i = 0; i < enemyCount; i++) {
+    const ex = 15 + Math.floor(Math.random() * (levelLen - 25));
+    // Make sure there's ground
+    if (tiles[ex] && tiles[ex][groundY]) {
+      const eType = Math.random() < 0.6 ? 'badReview' : 'competitor';
+      entities.push({
+        type: eType,
+        x: ex * TILE,
+        y: (groundY - 1) * TILE,
+        vx: (Math.random() < 0.5 ? -1 : 1) * (0.8 + worldIdx * 0.2),
+        alive: true,
+        patrolLeft: (ex - 3) * TILE,
+        patrolRight: (ex + 3) * TILE,
+      });
+    }
+  }
+
+  // Power-ups
+  for (let i = 0; i < 2 + worldIdx; i++) {
+    const px = 20 + Math.floor(Math.random() * (levelLen - 30));
+    const py = groundY - 3 - Math.floor(Math.random() * 2);
+    const pType = Math.random() < 0.5 ? 'hardhat' : 'speedboot';
+    entities.push({type:pType, x:px*TILE, y:py*TILE, collected:false, bobPhase: Math.random()*Math.PI*2});
+  }
+
+  // Flag at end
+  entities.push({type:'flag', x:(levelLen-5)*TILE, y:(groundY-4)*TILE});
+
+  // Background buildings
+  const buildings = [];
+  for (let i = 0; i < levelLen / 6; i++) {
+    buildings.push({
+      x: i * 6 * TILE + Math.random() * TILE * 3,
+      w: TILE * (2 + Math.random() * 3),
+      h: TILE * (3 + Math.random() * 6),
+      color: theme.buildingColors[Math.floor(Math.random() * theme.buildingColors.length)],
+      windows: Math.floor(Math.random() * 8) + 2,
+    });
+  }
+
+  return { tiles, entities, theme, groundY, levelLen, buildings };
+}
+
+// ========================
+// PLAYER
+// ========================
+function createPlayer() {
+  return {
+    x: 3 * TILE,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    w: 22,
+    h: 28,
+    onGround: false,
+    facing: 1,
+    frame: 0,
+    frameTimer: 0,
+    invincible: 0,
+    hardhat: 0,
+    speedboot: 0,
+    dead: false,
+    deathTimer: 0,
+    winTimer: 0,
+  };
+}
+
+// ========================
+// INIT
+// ========================
+function initGame(worldIdx = 0) {
+  const world = generateWorld(worldIdx);
+  G = {
+    player: createPlayer(),
+    world,
+    camera: { x: 0 },
+    score: 0,
+    leads: 0,
+    lives: 3,
+    worldIdx,
+    particles: [],
+    floats: [],
+    time: 0,
+    distanceTraveled: 0,
+    state: 'play', // play, dying, win
+  };
+  // Place player on ground
+  G.player.y = (world.groundY - 1) * TILE;
+  updateHUD();
+}
+
+function updateHUD() {
+  document.getElementById('h-score').textContent = G.score;
+  document.getElementById('h-world').textContent = (G.worldIdx + 1) + '-1';
+  const lv = document.getElementById('h-lives');
+  lv.innerHTML = '';
+  for (let i = 0; i < G.lives; i++) {
+    const s = document.createElement('span');
+    s.className = 'hud-heart';
+    s.textContent = '❤️';
+    lv.appendChild(s);
+  }
+}
+
+// ========================
+// COLLISION
+// ========================
+function getTile(tx, ty) {
+  const w = G.world;
+  if (tx < 0 || tx >= w.levelLen) return 0;
+  if (ty < 0 || ty >= w.groundY + 5) return ty >= w.groundY ? 2 : 0;
+  return (w.tiles[tx] && w.tiles[tx][ty]) || 0;
+}
+
+function isSolid(tx, ty) {
+  const t = getTile(tx, ty);
+  return t === 1 || t === 2 || t === 3 || t === 4;
+}
+
+function boxOverlap(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+// ========================
+// UPDATE
+// ========================
+function update() {
+  if (G.state === 'dying') {
+    G.player.deathTimer++;
+    G.player.vy += 0.3;
+    G.player.y += G.player.vy;
+    if (G.player.deathTimer > 90) {
+      G.lives--;
+      if (G.lives <= 0) {
+        gameOver();
+      } else {
+        // Respawn
+        G.player = createPlayer();
+        G.player.y = (G.world.groundY - 1) * TILE;
+        G.camera.x = 0;
+        G.state = 'play';
+        G.player.invincible = 120;
+        updateHUD();
+      }
+    }
+    updateParticles();
+    return;
+  }
+
+  if (G.state === 'win') {
+    G.player.winTimer++;
+    if (G.player.winTimer > 60) showClearScreen();
+    return;
+  }
+
+  G.time++;
+  const p = G.player;
+  const spd = p.speedboot > 0 ? MOVE_SPEED * 1.5 : MOVE_SPEED;
+
+  // Input
+  const left = keys['ArrowLeft'] || keys['KeyA'];
+  const right = keys['ArrowRight'] || keys['KeyD'];
+  const jump = keys['Space'] || keys['ArrowUp'] || keys['KeyW'];
+
+  // Movement
+  if (left) { p.vx -= MOVE_ACCEL; p.facing = -1; }
+  if (right) { p.vx += MOVE_ACCEL; p.facing = 1; }
+  if (!left && !right) p.vx *= FRICTION;
+
+  p.vx = Math.max(-spd, Math.min(spd, p.vx));
+  if (Math.abs(p.vx) < 0.1) p.vx = 0;
+
+  // Jump
+  if (jump && p.onGround) {
+    p.vy = JUMP_FORCE;
+    p.onGround = false;
+    sfxJump();
+  }
+  // Variable jump height
+  if (!jump && p.vy < -4) p.vy = -4;
+
+  // Gravity
+  p.vy += GRAVITY;
+  if (p.vy > MAX_FALL) p.vy = MAX_FALL;
+
+  // Animation
+  if (Math.abs(p.vx) > 0.5 && p.onGround) {
+    p.frameTimer++;
+    if (p.frameTimer > 6) { p.frameTimer = 0; p.frame = (p.frame + 1) % 4; }
+  } else if (!p.onGround) {
+    p.frame = 2;
+  } else {
+    p.frame = 0;
+    p.frameTimer = 0;
+  }
+
+  // Horizontal collision
+  p.x += p.vx;
+  const pLeft = Math.floor(p.x / TILE);
+  const pRight = Math.floor((p.x + p.w - 1) / TILE);
+  const pTop = Math.floor(p.y / TILE);
+  const pBot = Math.floor((p.y + p.h - 1) / TILE);
+
+  for (let ty = pTop; ty <= pBot; ty++) {
+    if (p.vx > 0 && isSolid(pRight, ty)) {
+      p.x = pRight * TILE - p.w;
+      p.vx = 0;
+    }
+    if (p.vx < 0 && isSolid(pLeft, ty)) {
+      p.x = (pLeft + 1) * TILE;
+      p.vx = 0;
+    }
+  }
+
+  // Vertical collision
+  p.onGround = false;
+  p.y += p.vy;
+  const pLeft2 = Math.floor(p.x / TILE);
+  const pRight2 = Math.floor((p.x + p.w - 1) / TILE);
+  const pTop2 = Math.floor(p.y / TILE);
+  const pBot2 = Math.floor((p.y + p.h - 1) / TILE);
+
+  if (p.vy >= 0) {
+    for (let tx = pLeft2; tx <= pRight2; tx++) {
+      if (isSolid(tx, pBot2)) {
+        p.y = pBot2 * TILE - p.h;
+        p.vy = 0;
+        p.onGround = true;
+      }
+    }
+  }
+  if (p.vy < 0) {
+    for (let tx = pLeft2; tx <= pRight2; tx++) {
+      if (isSolid(tx, pTop2)) {
+        p.y = (pTop2 + 1) * TILE;
+        p.vy = 0;
+      }
+    }
+  }
+
+  // Don't go left of camera or level start
+  if (p.x < G.camera.x) p.x = G.camera.x;
+  if (p.x < 0) p.x = 0;
+
+  // Fall death
+  if (p.y > H + TILE * 2) {
+    killPlayer();
+    return;
+  }
+
+  // Timers
+  if (p.invincible > 0) p.invincible--;
+  if (p.hardhat > 0) p.hardhat--;
+  if (p.speedboot > 0) p.speedboot--;
+
+  // Camera
+  const targetCamX = p.x - W * 0.35;
+  G.camera.x += (targetCamX - G.camera.x) * 0.08;
+  if (G.camera.x < 0) G.camera.x = 0;
+  G.distanceTraveled = Math.max(G.distanceTraveled, Math.floor(p.x / TILE));
+
+  // Entity collision
+  const pBox = { x: p.x, y: p.y, w: p.w, h: p.h };
+
+  for (const e of G.world.entities) {
+    if (e.collected || e.alive === false) continue;
+
+    const eBox = { x: e.x, y: e.y, w: TILE * 0.8, h: TILE * 0.8 };
+
+    // Collectibles
+    if ((e.type === 'lead' || e.type === 'star') && boxOverlap(pBox, eBox)) {
+      e.collected = true;
+      if (e.type === 'lead') { G.score += 100; G.leads++; sfxCoin(); }
+      if (e.type === 'star') { G.score += 500; sfxStar(); }
+      emitParticles(e.x + TILE/2, e.y + TILE/2, e.type === 'star' ? '#f59e0b' : '#00e5cc', 8);
+      addFloat(e.x, e.y, e.type === 'lead' ? '+$100' : '+$500', e.type === 'star' ? '#f59e0b' : '#00e5cc');
+      updateHUD();
+    }
+
+    // Power-ups
+    if ((e.type === 'hardhat' || e.type === 'speedboot') && !e.collected && boxOverlap(pBox, eBox)) {
+      e.collected = true;
+      if (e.type === 'hardhat') { p.hardhat = 480; addFloat(e.x, e.y, 'HARD HAT!', '#6b8aff'); }
+      if (e.type === 'speedboot') { p.speedboot = 480; addFloat(e.x, e.y, 'SPEED BOOST!', '#00e5cc'); }
+      sfxPowerup();
+      emitParticles(e.x + TILE/2, e.y + TILE/2, '#00e5cc', 15);
+    }
+
+    // Flag
+    if (e.type === 'flag' && boxOverlap(pBox, eBox)) {
+      G.state = 'win';
+      G.score += 1000;
+      sfxStar();
+      return;
+    }
+
+    // Enemies
+    if ((e.type === 'badReview' || e.type === 'competitor') && e.alive) {
+      // Update enemy
+      e.x += e.vx;
+      if (e.x <= e.patrolLeft || e.x >= e.patrolRight) e.vx *= -1;
+
+      // Check ground under enemy
+      const etx = Math.floor((e.x + TILE*0.4) / TILE);
+      const ety = Math.floor((e.y + TILE) / TILE);
+      if (!isSolid(etx, ety)) e.vx *= -1;
+
+      if (boxOverlap(pBox, eBox)) {
+        // Stomp from above?
+        if (p.vy > 0 && p.y + p.h - 4 < e.y + TILE * 0.3) {
+          // Stomp!
+          e.alive = false;
+          p.vy = JUMP_FORCE * 0.6;
+          G.score += 200;
+          sfxStomp();
+          emitParticles(e.x + TILE/2, e.y, '#ff6b4a', 12);
+          addFloat(e.x, e.y - 10, '+$200', '#ff6b4a');
+          updateHUD();
+        } else if (p.invincible <= 0) {
+          // Hit!
+          if (p.hardhat > 0) {
+            p.hardhat = 0;
+            p.invincible = 90;
+            sfxHurt();
+            addFloat(p.x, p.y - 10, 'SAVED!', '#6b8aff');
+          } else {
+            killPlayer();
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  updateParticles();
+}
+
+function killPlayer() {
+  G.state = 'dying';
+  G.player.vy = -8;
+  G.player.dead = true;
+  G.player.deathTimer = 0;
+  sfxHurt();
+  sfxDie();
+}
+
+function gameOver() {
+  running = false;
+  const isHS = G.score > highScore;
+  if (isHS) { highScore = G.score; localStorage.setItem('hvac_hero_hs', highScore); }
+  document.getElementById('hud').style.display = 'none';
+  document.getElementById('mob-ctrl').style.display = 'none';
+  document.getElementById('go-score').textContent = G.score;
+  document.getElementById('go-leads').textContent = G.leads;
+  document.getElementById('go-dist').textContent = G.distanceTraveled + 'm';
+  document.getElementById('go-best').textContent = 'Best: ' + highScore;
+  document.getElementById('go-hs').style.display = isHS ? '' : 'none';
+  setTimeout(() => document.getElementById('go-screen').classList.remove('hidden'), 200);
+}
+
+function showClearScreen() {
+  running = false;
+  document.getElementById('cl-world').textContent = (G.worldIdx + 1) + '-1';
+  const msgs = ['Great work, tech!', 'Another job done!', 'The customers love you!', 'HVAC legend!'];
+  document.getElementById('cl-msg').textContent = msgs[G.worldIdx % msgs.length] + ' Score: $' + G.score;
+  document.getElementById('clear-screen').classList.remove('hidden');
+}
+
+// Particles
+function emitParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = Math.random() * 3 + 1;
+    G.particles.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s - 2, life: 1, decay: 0.025 + Math.random()*0.02, size: 2 + Math.random()*3, color });
+  }
+}
+
+function addFloat(x, y, text, color) {
+  G.floats.push({ x, y, text, color, life: 1, vy: -1.5 });
+}
+
+function updateParticles() {
+  for (const p of G.particles) { p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.life -= p.decay; }
+  G.particles = G.particles.filter(p => p.life > 0);
+  for (const f of G.floats) { f.y += f.vy; f.life -= 0.02; }
+  G.floats = G.floats.filter(f => f.life > 0);
+}
+
+// ========================
+// DRAW
+// ========================
+function draw() {
+  const theme = G.world.theme;
+  const cam = G.camera.x;
+
+  // Sky
+  const skyGrad = X.createLinearGradient(0, 0, 0, H);
+  skyGrad.addColorStop(0, theme.bg1);
+  skyGrad.addColorStop(1, theme.bg2);
+  X.fillStyle = skyGrad;
+  X.fillRect(0, 0, W, H);
+
+  // Stars in sky
+  for (let i = 0; i < 30; i++) {
+    const sx = ((i * 137.3 + 50) % (W + 200)) - cam * 0.02 % (W + 200);
+    const sy = (i * 73.7) % (H * 0.5);
+    X.fillStyle = `rgba(255,255,255,${0.2 + Math.sin(G.time * 0.02 + i) * 0.15})`;
+    X.fillRect(((sx % W) + W) % W, sy, 2, 2);
+  }
+
+  // Background buildings (parallax)
+  for (const b of G.world.buildings) {
+    const bx = b.x - cam * 0.3;
+    if (bx > -b.w && bx < W + b.w) {
+      const groundPx = G.world.groundY * TILE - cam * 0 ;
+      X.fillStyle = b.color;
+      X.fillRect(bx, groundPx - b.h, b.w, b.h);
+      // Windows
+      X.fillStyle = 'rgba(255,200,50,0.15)';
+      const wSize = 4;
+      const wGap = 10;
+      for (let wy = groundPx - b.h + 8; wy < groundPx - 8; wy += wGap) {
+        for (let wx = bx + 6; wx < bx + b.w - 6; wx += wGap) {
+          if (Math.sin(wx * 7.3 + wy * 13.7 + G.time * 0.01) > 0) {
+            X.fillRect(wx, wy, wSize, wSize);
+          }
+        }
+      }
+    }
+  }
+
+  // Tiles
+  const startCol = Math.floor(cam / TILE);
+  const endCol = startCol + COLS;
+
+  for (let tx = startCol; tx < endCol && tx < G.world.levelLen; tx++) {
+    for (let ty = 0; ty < G.world.groundY + 5; ty++) {
+      const t = getTile(tx, ty);
+      if (!t) continue;
+      const dx = tx * TILE - cam;
+      const dy = ty * TILE;
+
+      if (t === 1) {
+        // Ground top
+        X.fillStyle = theme.ground;
+        X.fillRect(dx, dy, TILE, TILE);
+        X.fillStyle = theme.ground + '40';
+        X.fillRect(dx, dy, TILE, 3);
+      } else if (t === 2) {
+        // Ground fill
+        X.fillStyle = theme.groundDark;
+        X.fillRect(dx, dy, TILE, TILE);
+      } else if (t === 3) {
+        // Platform
+        X.fillStyle = '#5a6a8a';
+        X.fillRect(dx, dy, TILE, TILE * 0.4);
+        X.fillStyle = '#4a5a7a';
+        X.fillRect(dx, dy + TILE * 0.4, TILE, TILE * 0.6);
+        // Bolts
+        X.fillStyle = '#7a8aaa';
+        X.fillRect(dx + 3, dy + 3, 3, 3);
+        X.fillRect(dx + TILE - 6, dy + 3, 3, 3);
+      } else if (t === 4) {
+        // HVAC Duct
+        X.fillStyle = '#8a8a9a';
+        X.fillRect(dx, dy + 4, TILE, TILE - 8);
+        X.fillStyle = '#9a9aaa';
+        X.fillRect(dx, dy + 4, TILE, 4);
+        // Vent lines
+        X.strokeStyle = '#6a6a7a';
+        X.lineWidth = 1;
+        for (let vx = dx + 6; vx < dx + TILE - 4; vx += 6) {
+          X.beginPath();
+          X.moveTo(vx, dy + 10);
+          X.lineTo(vx, dy + TILE - 6);
+          X.stroke();
+        }
+      }
+    }
+  }
+
+  // Entities
+  for (const e of G.world.entities) {
+    if (e.collected || e.alive === false) continue;
+    const ex = e.x - cam;
+    const ey = e.y;
+    if (ex < -TILE * 2 || ex > W + TILE * 2) continue;
+
+    const bob = Math.sin((G.time * 0.05) + (e.bobPhase || 0)) * 3;
+
+    if (e.type === 'lead') {
+      X.globalAlpha = 1;
+      X.font = '20px "Apple Color Emoji","Segoe UI Emoji",sans-serif';
+      X.textAlign = 'center';
+      X.textBaseline = 'middle';
+      X.fillText('🔥', ex + TILE/2, ey + TILE/2 + bob);
+    } else if (e.type === 'star') {
+      X.font = '22px "Apple Color Emoji","Segoe UI Emoji",sans-serif';
+      X.textAlign = 'center';
+      X.textBaseline = 'middle';
+      X.fillText('⭐', ex + TILE/2, ey + TILE/2 + bob);
+    } else if (e.type === 'hardhat') {
+      X.font = '22px "Apple Color Emoji","Segoe UI Emoji",sans-serif';
+      X.textAlign = 'center';
+      X.textBaseline = 'middle';
+      X.fillText('🛡️', ex + TILE/2, ey + TILE/2 + bob);
+    } else if (e.type === 'speedboot') {
+      X.font = '22px "Apple Color Emoji","Segoe UI Emoji",sans-serif';
+      X.textAlign = 'center';
+      X.textBaseline = 'middle';
+      X.fillText('⚡', ex + TILE/2, ey + TILE/2 + bob);
+    } else if (e.type === 'flag') {
+      // Flag pole
+      X.fillStyle = '#aaa';
+      X.fillRect(ex + TILE/2 - 2, ey, 4, TILE * 4);
+      // Flag
+      X.fillStyle = '#00e5cc';
+      X.beginPath();
+      X.moveTo(ex + TILE/2 + 2, ey);
+      X.lineTo(ex + TILE/2 + 26, ey + 12);
+      X.lineTo(ex + TILE/2 + 2, ey + 24);
+      X.fill();
+      X.fillStyle = '#fff';
+      X.font = 'bold 8px "DM Sans",sans-serif';
+      X.textAlign = 'center';
+      X.fillText('HVAC', ex + TILE/2 + 14, ey + 14);
+    } else if (e.type === 'badReview' || e.type === 'competitor') {
+      const emoji = e.type === 'badReview' ? '👎' : '😈';
+      X.font = '24px "Apple Color Emoji","Segoe UI Emoji",sans-serif';
+      X.textAlign = 'center';
+      X.textBaseline = 'middle';
+      X.fillText(emoji, ex + TILE/2, ey + TILE/2);
+    }
+  }
+  X.globalAlpha = 1;
+
+  // Player
+  const p = G.player;
+  const px = p.x - cam;
+  const py = p.y;
+
+  if (p.invincible > 0 && Math.floor(G.time / 4) % 2 === 0) {
+    // Blink when invincible
+  } else {
+    X.save();
+    X.translate(px + p.w / 2, py + p.h / 2);
+    if (p.facing < 0) X.scale(-1, 1);
+
+    // Hard hat glow
+    if (p.hardhat > 0) {
+      X.fillStyle = 'rgba(107,138,255,0.15)';
+      X.beginPath();
+      X.arc(0, 0, 20, 0, Math.PI * 2);
+      X.fill();
+    }
+
+    // Speed trail
+    if (p.speedboot > 0) {
+      X.fillStyle = 'rgba(0,229,204,0.1)';
+      X.fillRect(-18, -5, 8, 10);
+      X.fillRect(-24, -3, 6, 6);
+    }
+
+    // Body
+    X.fillStyle = '#2d4aad';
+    X.fillRect(-8, -6, 16, 18);
+
+    // Head
+    X.fillStyle = '#f0c090';
+    X.fillRect(-6, -14, 12, 10);
+
+    // Hard hat
+    if (p.hardhat > 0) {
+      X.fillStyle = '#f59e0b';
+      X.fillRect(-8, -16, 16, 5);
+      X.fillRect(-6, -18, 12, 4);
+    } else {
+      // Cap
+      X.fillStyle = '#1a2b6b';
+      X.fillRect(-7, -16, 14, 4);
+      X.fillRect(-4, -18, 10, 3);
+    }
+
+    // Eyes
+    X.fillStyle = '#222';
+    X.fillRect(1, -12, 3, 3);
+
+    // Tool belt
+    X.fillStyle = '#8B4513';
+    X.fillRect(-9, 4, 18, 3);
+    X.fillStyle = '#ddd';
+    X.fillRect(5, 2, 3, 3); // wrench
+
+    // Legs animation
+    const legOff = p.onGround ? Math.sin(p.frame * Math.PI / 2) * 4 : 4;
+    X.fillStyle = '#444';
+    X.fillRect(-6, 12, 5, 6 + legOff);
+    X.fillRect(1, 12, 5, 6 - legOff);
+
+    // Boots
+    X.fillStyle = p.speedboot > 0 ? '#00e5cc' : '#333';
+    X.fillRect(-7, 17 + legOff, 7, 3);
+    X.fillRect(0, 17 - legOff, 7, 3);
+
+    X.restore();
+  }
+
+  // Particles
+  for (const pt of G.particles) {
+    X.globalAlpha = pt.life;
+    X.fillStyle = pt.color;
+    X.fillRect(pt.x - cam - pt.size/2, pt.y - pt.size/2, pt.size, pt.size);
+  }
+  X.globalAlpha = 1;
+
+  // Floating text
+  for (const f of G.floats) {
+    X.globalAlpha = f.life;
+    X.font = 'bold 13px "Press Start 2P",monospace';
+    X.textAlign = 'center';
+    X.fillStyle = f.color;
+    X.shadowBlur = 6;
+    X.shadowColor = f.color;
+    X.fillText(f.text, f.x - cam, f.y);
+    X.shadowBlur = 0;
+  }
+  X.globalAlpha = 1;
+}
+
+// ========================
+// GAME LOOP
+// ========================
+function loop() {
+  if (!running) return;
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function startGame(worldIdx = 0) {
+  initAudio();
+  initGame(worldIdx);
+  document.getElementById('start-screen').classList.add('hidden');
+  document.getElementById('go-screen').classList.add('hidden');
+  document.getElementById('clear-screen').classList.add('hidden');
+  document.getElementById('hud').style.display = '';
+  if ('ontouchstart' in window) document.getElementById('mob-ctrl').style.display = 'flex';
+  running = true;
+  keys = {};
+  loop();
+}
+
+// Buttons
+document.getElementById('btn-start').addEventListener('click', () => startGame(0));
+document.getElementById('btn-retry').addEventListener('click', () => startGame(0));
+document.getElementById('btn-next').addEventListener('click', () => {
+  const nextWorld = G.worldIdx + 1;
+  const savedScore = G.score;
+  const savedLeads = G.leads;
+  const savedLives = G.lives;
+  startGame(nextWorld);
+  G.score = savedScore;
+  G.leads = savedLeads;
+  G.lives = savedLives;
+  updateHUD();
+});
+
+document.addEventListener('keydown', e => {
+  if ((e.code === 'Space' || e.code === 'Enter') && !running) {
+    if (!document.getElementById('start-screen').classList.contains('hidden')) startGame(0);
+    else if (!document.getElementById('go-screen').classList.contains('hidden')) startGame(0);
+  }
+});
+
+// Idle bg
+function drawIdle() {
+  const grad = X.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0a0a12');
+  grad.addColorStop(1, '#111425');
+  X.fillStyle = grad;
+  X.fillRect(0, 0, W, H);
+  for (let i = 0; i < 30; i++) {
+    const x = (Math.sin(i * 7.3 + Date.now() * 0.0001) * 0.5 + 0.5) * W;
+    const y = (Math.cos(i * 13.7 + Date.now() * 0.00008) * 0.5 + 0.5) * H * 0.6;
+    X.globalAlpha = 0.15 + Math.sin(Date.now() * 0.002 + i) * 0.1;
+    X.fillStyle = '#fff';
+    X.fillRect(x, y, 1.5, 1.5);
+  }
+  X.globalAlpha = 1;
+  if (!running) requestAnimationFrame(drawIdle);
+}
+drawIdle();
+</script>
+</body>
+</html>
